@@ -1,0 +1,112 @@
+
+package no.priv.garshol.duke;
+
+import java.util.Map;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Properties;
+import java.util.Collection;
+import java.util.Collections;
+import java.sql.Statement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+
+public class JDBCDataSource extends ColumnarDataSource {
+  private String jdbcuri;
+  private String driverclass;
+  private String username;
+  private String password;
+  private String query;
+
+  public JDBCDataSource() {
+    super();
+  }
+
+  public void setConnectionString(String str) {
+    this.jdbcuri = str;
+  }
+
+  public void setDriverClass(String klass) {
+    this.driverclass = klass;
+  }
+
+  public void setUserName(String username) {
+    this.username = username;
+  }
+
+  public void setPassword(String password) {
+    this.password = password;
+  }
+
+  public void setQuery(String query) {
+    this.query = query;
+  }
+  
+  public RecordIterator getRecords() {
+    verifyProperty(jdbcuri, "connection-string");
+    verifyProperty(driverclass, "driver-class");
+    verifyProperty(query, "query");
+    
+    try {
+      Properties props = new Properties();
+      if (username != null)
+        props.put("user", username);
+      if (password != null)
+        props.put("password", password);
+      Statement stmt = JDBCUtils.open(driverclass, jdbcuri, props);
+      ResultSet rs = stmt.executeQuery(query);
+      return new JDBCIterator(rs);
+    } catch (SQLException e) {
+      throw new RuntimeException(e);
+    }
+  }
+
+  protected String getSourceName() {
+    return "JDBC";
+  }
+
+  class JDBCIterator extends RecordIterator {
+    private ResultSet rs;
+    private boolean next;
+
+    public JDBCIterator(ResultSet rs) throws SQLException {
+      this.rs = rs;
+      this.next = rs.next();
+    }
+    
+    public boolean hasNext() {
+      return next;
+    }
+
+    public Record next() {
+      try {
+        Map<String, Collection<String>> values = new HashMap();
+        for (Column col : columns.values()) {
+          String value = rs.getString(col.getName());
+          if (value == null)
+            continue;
+          
+          if (col.getCleaner() != null)
+            value = col.getCleaner().clean(value);
+          if (value == null || value.equals(""))
+            continue; // nothing here, move on
+          if (col.getPrefix() != null)
+            value = col.getPrefix() + value;
+          
+          String propname = col.getProperty();
+          values.put(propname, Collections.singleton(value));          
+        }
+
+        next = rs.next(); // step to next
+
+        return new RecordImpl(values);
+      } catch (SQLException e) {
+        throw new RuntimeException(e);
+      }
+    }
+
+    public void close() {
+      JDBCUtils.close(rs);
+    }
+  }
+}
