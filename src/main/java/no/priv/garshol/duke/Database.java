@@ -44,6 +44,11 @@ public class Database {
   private Collection<MatchListener> listeners;
   private Analyzer analyzer;
 
+  // at index ix, the minimum probability a record must have *before*
+  // comparison with property ix, in order to have any chance of going
+  // over the threshold.
+  // private double[] minprob;
+  
   public Database(String path, Collection<Property> props, double threshold,
                   double thresholdMaybe, boolean overwrite) {
     this.path = path;
@@ -252,6 +257,7 @@ public class Database {
   // ----- INTERNALS
 
   private void findLookupProperties() {
+    // sort properties by high probability
     List<Property> candidates = new ArrayList();
     for (Property prop : properties.values())
       if (!prop.isIdProperty())
@@ -259,6 +265,7 @@ public class Database {
 
     Collections.sort(candidates, new HighComparator());
 
+    // find the lookup properties
     int ix;
     double prob = 0.5;    
     for (ix = 0; ix < candidates.size(); ix++) {
@@ -274,6 +281,50 @@ public class Database {
                                  "be found");
     
     lookups = new ArrayList(candidates.subList(ix, candidates.size()));
+
+    // analyze again, to see what probability must be *before* each
+    // property so that we can break off processing of records whose
+    // probabilities are so low that they cannot get above the threshold
+    // even if all remaining properties match.
+    // minprob = new double[candidates.size()];
+    // for (ix = candidates.size() - 1; ix >= 0; ix--) {
+    //   double mustgetto;
+    //   if (ix + 1 == candidates.size())
+    //     mustgetto = threshold;
+    //   else
+    //     mustgetto = minprob[ix + 1];
+
+    //   double high = candidates.get(ix).getHighProbability();
+
+// NOTE: I tried to work out the equation for doing Bayes backwards, but
+// must have gotten it wrong somehow. it certainly doesn't produce the
+// right results. will return to this and work on it later. probably
+// best to do the equations on paper.
+      
+// mustgetto = bayes(high, min)
+
+// mustgetto = 
+//     (high * min) /
+//       ((high * min) + ((1.0 - high) * (1.0 - min)))
+
+// 1 / mustgetto =
+//   ((high * min) + ((1.0 - high) * (1.0 - min))) / (high * min)
+
+// (high * min) / mustgetto =
+//   (high * min) + ((1.0 - high) * (1.0 - min))
+
+// (high * min) / mustgetto - ((1.0 - high) * (1.0 - min)) = (high * min)
+
+// 1 / mustgetto - ((1.0 - high) * (1.0 - min)) = 1
+
+// (1.0 - high) * (1.0 - min) = 1 - (1 / mustgetto)
+
+// 1.0 - min = (1 - (1 / mustgetto)) / (1.0 - high)
+
+// - min = (1 - (1 / mustgetto)) / (1.0 - high) - 1.0
+
+// min = 1.0 - (1 - (1.0 / mustgetto)) / (1.0 - high)      
+//    }
   }
 
   private class HighComparator implements java.util.Comparator<Property> {

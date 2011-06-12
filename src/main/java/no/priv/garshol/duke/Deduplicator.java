@@ -45,8 +45,26 @@ public class Deduplicator {
   private void match(Record record) throws IOException {
     database.startRecord(record);
     Set<Record> candidates = new HashSet(100);
-    for (Property p : database.getLookupProperties())
-      candidates.addAll(database.lookup(p, record.getValues(p.getName())));
+    for (Property p : database.getLookupProperties()) {
+      int ix = 0;
+      int lastmatch = 0;
+      for (Record candidate : database.lookup(p, record.getValues(p.getName()))) {
+        if (candidates.contains(candidate)) {
+          lastmatch = ix;
+          continue; // this is a good one, but we've already found it
+        }
+        
+        if (compare(p, record, candidate) > 0.5)
+          lastmatch = ix;
+
+        // we cut off here since we assume no more good values are coming
+        if (ix - lastmatch > 10) // FIXME: must make this configurable
+          break;
+
+        candidates.add(candidate);
+        ix++;
+      }
+    }
     
     for (Record candidate : candidates) {
       if (isSameAs(record, candidate))
@@ -104,28 +122,35 @@ public class Deduplicator {
       Collection<String> vs2 = r2.getValues(propname);
       if (vs1.isEmpty() || vs2.isEmpty())
         continue; // no values to compare, so skip
-      
-      double high = 0.0;
-      for (String v1 : vs1) {
-        if (v1.equals("")) // FIXME: these values shouldn't be here at all
-          continue;
-        
-        for (String v2 : vs2) {
-          if (v2.equals("")) // FIXME: these values shouldn't be here at all
-            continue;
-        
-          try {
-            high = Math.max(high, prop.compare(v1, v2));
-          } catch (Exception e) {
-            throw new RuntimeException("Comparison of values '" + v1 + "' and "+
-                                       "'" + v2 + "' failed", e);
-          }
-        }
-      }
 
+      double high = compare(prop, r1, r2);
       prob = Utils.computeBayes(prob, high);
     }
     return prob;
+  }
+
+  public double compare(Property p, Record r1, Record r2) {
+    Collection<String> vs1 = r1.getValues(p.getName());
+    Collection<String> vs2 = r2.getValues(p.getName());
+    
+    double high = 0.0;
+    for (String v1 : vs1) {
+      if (v1.equals("")) // FIXME: these values shouldn't be here at all
+        continue;
+      
+      for (String v2 : vs2) {
+        if (v2.equals("")) // FIXME: these values shouldn't be here at all
+          continue;
+        
+        try {
+          high = Math.max(high, p.compare(v1, v2));
+        } catch (Exception e) {
+          throw new RuntimeException("Comparison of values '" + v1 + "' and "+
+                                     "'" + v2 + "' failed", e);
+        }
+      }
+    }
+    return high;
   }
 
   private boolean isSameAs(Record r1, Record r2) {
