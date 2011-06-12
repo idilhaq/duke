@@ -48,6 +48,12 @@ public class Deduplicator {
     for (Property p : database.getLookupProperties()) {
       int ix = 0;
       int lastmatch = 0;
+
+      // FIXME: this is pretty good, but unless it's integrated with the
+      // Lucene lookup we lose a lot of performance here. need to revamp
+      // this completely to go over to the new algorithm. it seems that
+      // this is substantially faster, though.
+      
       for (Record candidate : database.lookup(p, record.getValues(p.getName()))) {
         if (candidates.contains(candidate)) {
           lastmatch = ix;
